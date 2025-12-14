@@ -28,19 +28,26 @@ function RoomPage() {
       return;
     }
 
+    const socket = getSocket();
     const term = new Terminal({ cursorBlink: true });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(termRef.current);
     fitAddon.fit();
 
+    // Send terminal data to the server
     term.onData(data => {
-      // Simple echo terminal
-      term.write(data);
+        if (socket) {
+            socket.emit('terminal:data', data);
+        }
     });
 
-    const socket = getSocket();
     if (socket) {
+      // Handle terminal response from the server
+      socket.on('terminal:response', (data) => {
+          term.write(data);
+      });
+
       socket.on('cursor:move', ({ userId, position, username }) => {
         setCursors(prev => {
           const existing = prev.find(c => c.userId === userId);
@@ -66,6 +73,7 @@ function RoomPage() {
         socket.off('cursor:move');
         socket.off('user:leave');
         socket.off('update-participants');
+        socket.off('terminal:response');
       }
     };
 
