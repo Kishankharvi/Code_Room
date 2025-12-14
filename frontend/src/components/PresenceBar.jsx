@@ -1,32 +1,23 @@
-export default function PresenceBar({ participants }) {
-  console.log(participants)
-  console.log("Rendering PresenceBar with participants:", participants);
-  console.log("Number of participants:", participants.length);
-  return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-gray-800 mb-2">
-        Online ({participants.length})
-      </h3>
+import React from 'react';
 
-      <ul className="space-y-2">
-        {participants.map((p) => (
-          <li
-            key={p.username}
-            className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded-xl"
-          >
+const PresenceBar = ({ participants }) => {
+  if (!participants || participants.length === 0) {
+    return <div className="text-sm text-gray-400">No other users in this room.</div>;
+  }
+
+  return (
+    <div>
+      <h4 className="font-bold mb-2 text-md">Participants ({participants.length})</h4>
+      <div className="flex flex-wrap gap-2">
+        {participants.map(p => (
+          <div key={p._id} className="flex items-center gap-2 bg-gray-700 px-2 py-1 rounded-full text-sm">
+            <span className={`h-2.5 w-2.5 rounded-full ${p.role === 'mentor' ? 'bg-green-400' : 'bg-blue-400'}`} title={p.role}></span>
             <span>{p.username}</span>
-            <span
-              className={`px-2 py-0.5 rounded-xl text-xs ${
-                p.role === "mentor"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-100 text-blue-700"
-              }`}
-            >
-              {p.role}
-            </span>
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
-}
+};
+
+export default PresenceBar;

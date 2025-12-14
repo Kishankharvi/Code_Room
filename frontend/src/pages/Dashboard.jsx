@@ -1,17 +1,23 @@
-import React from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { UserContext } from "../context/UserContext";
 
 export default function Dashboard(){
-  const nav=useNavigate();
-  const user=JSON.parse(localStorage.getItem("user")||"null") || (useLocation().state?.user);
+  const nav = useNavigate();
+  const { user, logout, loading } = useContext(UserContext);
 
-  if(!user) {
-    nav("/");
-    return null;
+  useEffect(() => {
+    if (!loading && !user) {
+      nav("/");
+    }
+  }, [user, loading, nav]);
+
+  if (loading) {
+    return <div>Loading...</div>;
   }
 
   function handleLogout() {
-    localStorage.removeItem("user");
+    logout();
     nav("/");
   }
 
@@ -33,7 +39,7 @@ export default function Dashboard(){
             <div className="card-icon">📝</div>
             <h2>Create a Room</h2>
             <p>Start a new mentoring session with customizable settings</p>
-            <button onClick={()=>nav("/create-room",{state:{user}})} className="btn btn-primary">
+            <button onClick={()=>nav("/create-room")} className="btn btn-primary">
               Create Room
             </button>
           </div>
@@ -42,7 +48,7 @@ export default function Dashboard(){
             <div className="card-icon">🚪</div>
             <h2>Join a Room</h2>
             <p>Enter an existing session using a room code</p>
-            <button onClick={()=>nav("/join-room",{state:{user}})} className="btn btn-primary">
+            <button onClick={()=>nav("/join-room")} className="btn btn-primary">
               Join Room
             </button>
           </div>

@@ -1,240 +1,189 @@
-import React, { useEffect, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { connectSocket, getSocket } from "../services/socket";
-import { getRoom, executeCode } from "../services/api";
-import PresenceBar from "../components/PresenceBar";
-import Toast from "../components/Toast";
-import "./room.css";
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Tree } from 'react-arborist';
+import { Editor } from '@monaco-editor/react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { RoomContext } from '../context/RoomContext';
+import { UserContext } from '../context/UserContext';
+import ChatBox from '../components/ChatBox';
+import Cursor from '../components/Cursor';
+import { getSocket } from '../services/socket';
+import '@xterm/xterm/css/xterm.css';
 
-export default function RoomPage(){
-  const { roomId } = useParams();
-  const loc = useLocation();
-  const nav = useNavigate();
-  const user = loc.state?.user || JSON.parse(localStorage.getItem("user")||"null");
-  
-  const [room, setRoom] = useState(null);
-  const [code, setCode] = useState("// type code here\n");
-  const [messages, setMessages] = useState([]);
-  const [chatText, setChatText] = useState("");
-  const [output, setOutput] = useState("");
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState("");
-  const [toast, setToast] = useState(null);
-  const socketRef = useRef(null);
-  const chatEndRef = useRef(null);
-
-  useEffect(()=> {
-    (async ()=> {
-      try {
-        const r = await getRoom(roomId,user);
-        if(!r) {
-          setError("Room not found");
-          return;
-        }
-        setRoom(r);
-        if(r?.language) setCode(`// language: ${r.language}\n`);
-      } catch(err) {
-        setError("Failed to load room");
-      }
-    })();
-    
-    const socket = connectSocket();
-    socketRef.current = socket;
-    socket.emit("join-room", { roomId, user });
-
-    socket.on("receive-chat", m => {
-      setMessages(prev => [...prev, m]);
-    });
-    
-    socket.on("code-update", ({ code: incoming }) => {
-      if(incoming && incoming !== code) setCode(incoming);
-    });
-
-    socket.on("error", (err) => {
-      setError(err.message || "Connection error");
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [roomId]);
+function RoomPage() {
+  const navigate = useNavigate();
+  const { user } = useContext(UserContext);
+  const { room, files, code, setCode, selectFile } = useContext(RoomContext);
+  const termRef = useRef(null);
+  const editorRef = useRef(null);
+  const [cursors, setCursors] = useState([]);
+  const [copied, setCopied] = useState(false);
+  const [participants, setParticipants] = useState([]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  function sendMessage(){
-    if(!chatText.trim() || !socketRef.current) return;
-    const msg = { roomId, username: user.username, text: chatText, timestamp: new Date() };
-    console.log("[v0] Sending chat message:", msg);
-
-    socketRef.current.emit("send-chat", msg);
-    setChatText("");
-  }
-
-  function onCodeChange(v){
-    setCode(v);
-    if(socketRef.current) {
-      console.log("[v0] Emitting code change"+v);
-      
-      socketRef.current.emit("code-change", { roomId, code: v });
+    if (!user) {
+      navigate('/');
+      return;
     }
-  }
 
+    const term = new Terminal({ cursorBlink: true });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(termRef.current);
+    fitAddon.fit();
 
-  async function run() {
-    try {
-      setRunning(true);
-      setOutput("");
-      setError("");
-      console.log(" Executing code with language:", room?.language);
-      
-      const res = await executeCode({ 
-        language: room?.language || "javascript", 
-        code 
+    term.onData(data => {
+      // Simple echo terminal
+      term.write(data);
+    });
+
+    const socket = getSocket();
+    if (socket) {
+      socket.on('cursor:move', ({ userId, position, username }) => {
+        setCursors(prev => {
+          const existing = prev.find(c => c.userId === userId);
+          if (existing) {
+            return prev.map(c => c.userId === userId ? { ...c, position } : c);
+          } else {
+            return [...prev, { userId, position, username, color: '#' + Math.floor(Math.random()*16777215).toString(16) }];
+          }
+        });
       });
-      
-      console.log(" Execution result:", res);
-      setOutput(res.output || "Code executed successfully with no output");
-      setToast({ message: "Code executed successfully!", type: "success" });
-    } catch(err) {
-      console.error("[v0] Execution failed:", err);
-      const errorMsg = err.response?.data?.error || err.message || "Execution failed";
-      setError(errorMsg);
-      setToast({ message: `Execution failed: ${errorMsg}`, type: "error" });
-    } finally {
-      setRunning(false);
+
+      socket.on('user:leave', ({ userId }) => {
+        setCursors(prev => prev.filter(c => c.userId !== userId));
+      });
+
+      socket.on('update-participants', (participants) => {
+        setParticipants(participants);
+      });
     }
-  }
 
-  const canEdit = !room ? false : (room.mode === "one-to-one" ? true : (user?._id === room.createdBy));
+    return () => {
+      if (socket) {
+        socket.off('cursor:move');
+        socket.off('user:leave');
+        socket.off('update-participants');
+      }
+    };
 
-  if(error && error === "Room not found") {
-    return (
-      <div className="error-container">
-        <h2>{error}</h2>
-        <button onClick={() => nav("/dashboard")} className="btn btn-primary">Back to Dashboard</button>
-      </div>
-    );
-  }
+  }, [user, navigate]);
+
+  const onSelect = (node) => {
+    if (node.isLeaf) {
+      selectFile(node.data);
+    }
+  };
+
+  const handleEditorDidMount = (editor) => {
+    editorRef.current = editor;
+    editor.onDidChangeCursorPosition(e => {
+      const socket = getSocket();
+      if (socket) {
+        socket.emit('cursor:move', { roomId: room.roomId, position: e.position });
+      }
+    });
+  };
+
+  const handleCopy = () => {
+    if (room?.roomId) {
+        navigator.clipboard.writeText(room.roomId);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
-    <div className="room-wrapper">
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-
-      <header className="room-header">
-        <div className="header-left">
-          <h2>Room: <code>{roomId}</code></h2>
-          <span className="mode-badge">{room?.mode === "one-to-one" ? "Interview" : "Teaching"}</span>
+    <div className="flex flex-col h-screen w-screen bg-gray-800 text-white">
+      {/* Header */}
+      <header className="flex justify-between items-center p-2 bg-gray-900 border-b border-gray-700">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-bold">{room?.name || 'Loading...'}</h2>
         </div>
-        <div className="header-right">
-          <span className="user-display">👤 {user?.username}</span>
-          <button onClick={() => nav("/dashboard")} className="btn btn-outline btn-sm">Leave</button>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-400">@{user.username}</span>
+          <button onClick={handleCopy} title="Copy Room ID to clipboard" className="px-3 py-2 text-sm bg-gray-700 hover:bg-gray-600 rounded-md">
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+          <button onClick={() => navigate('/dashboard')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm">
+            Leave
+          </button>
         </div>
       </header>
+      
+      {/* Main Layout */}
+      <PanelGroup direction="horizontal" className="flex-grow">
+        {/* Left Panel */}
+        <Panel defaultSize={20}>
+          <PanelGroup direction="vertical">
+            <Panel defaultSize={70} className="p-2 bg-gray-900">
+              <h3 className="font-bold mb-2 text-md">Files</h3>
+              <Tree initialData={files} onActivate={onSelect}>
+                {Node}
+              </Tree>
+            </Panel>
+            <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
+            <Panel defaultSize={30}>
+              <ChatBox participants={participants} />
+            </Panel>
+          </PanelGroup>
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-600" />
+        {/* Editor and Terminal Panel */}
+        <Panel>
+          <PanelGroup direction="vertical">
+            {/* Editor Panel */}
+            <Panel>
+              <div className="relative h-full w-full">
+                <Editor
+                  height="100%"
+                  language="javascript"
+                  value={code}
+                  onChange={(value) => setCode(value)}
+                  theme="vs-dark"
+                  onMount={handleEditorDidMount}
+                />
+                {cursors.map(c => {
+                  if (!editorRef.current) return null;
+                  const editor = editorRef.current;
+                  const position = editor.getScrolledVisiblePosition(c.position);
+                  if (!position) return null;
 
-      <aside className="sidebar">
-        <div className="sidebar-section">
-          <h3 className="sidebar-title">Participants</h3>
-          <div className="participants-list">
-            {room?.users?.map((u,i)=> (
-              <div key={i} className="participant-item">
-                <span className="status-dot"></span>
-                {u.username}
+                  const top = position.top;
+                  const left = position.left;
+                  
+                  return (
+                    <Cursor
+                      key={c.userId}
+                      color={c.color}
+                      x={left}
+                      y={top}
+                      name={c.username}
+                    />
+                  );
+                })}
               </div>
-            )) || <p className="empty-state">No participants yet</p>}
-  {/* console.log(" Room users:",);
-            <PresenceBar participants={user} /> */}
-          
-          </div>
-        </div>
-
-        <div className="sidebar-section">
-          <h3 className="sidebar-title">Language</h3>
-          <div className="language-badge">{room?.language || 'javascript'}</div>
-        </div>
-      </aside>
-
-      <main className="editor-section">
-        <div className="editor-header">
-          <span>Editor</span>
-          <div className="editor-actions">
-            {error && <span className="error-text">{error}</span>}
-            <button className="btn btn-run" onClick={run} disabled={running || !code.trim()}>
-              {running ? "⏳ Running..." : "▶ Run Code"}
-            </button>
-          </div>
-        </div>
-        
-        <div className="editor-box">
-          <Editor 
-            height="100%" 
-            language={room?.language||'javascript'} 
-            value={code} 
-            options={{ 
-              readOnly: !canEdit,
-              minimap:{enabled:false},
-              fontSize: 13,
-              fontFamily: "'Fira Code', monospace",
-              theme: 'vs-dark'
-            }} 
-            onChange={onCodeChange}
-            theme="vs-dark"
-          />
-        </div>
-
-        <div className="output-section">
-          <div className="output-header">
-            <span>Output</span>
-            {output && <button className="btn btn-clear" onClick={() => setOutput("")}>Clear</button>}
-          </div>
-          <div className="output-box">
-            {output ? (
-              <pre>{output}</pre>
-            ) : (
-              <p className="empty-state">Run your code to see output here...</p>
-            )}
-          </div>
-        </div>
-      </main>
-
-      <aside className="chat-section">
-        <div className="chat-header">
-          <span>💬 Chat</span>
-        </div>
-        
-        <div className="chat-box">
-          {messages.length === 0 ? (
-            <p className="empty-state">No messages yet</p>
-          ) : (
-            messages.map((m,i)=> (
-              <div key={i} className="chat-message">
-                <span className="username">{m.username}:</span>
-                <span className="text">{m.text}</span>
-              </div>
-            ))
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        <div className="chat-input-group">
-          <input 
-            value={chatText} 
-            onChange={e=>setChatText(e.target.value)}
-            onKeyPress={e => e.key === "Enter" && sendMessage()}
-            className="chat-input" 
-            placeholder="Type a message..."
-          />
-          <button className="chat-btn" onClick={sendMessage} disabled={!chatText.trim()}>Send</button>
-        </div>
-      </aside>
+            </Panel>
+            <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
+            {/* Terminal Panel */}
+            <Panel defaultSize={30}>
+              <div ref={termRef} className="h-full w-full bg-black" />
+            </Panel>
+          </PanelGroup>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }
+
+function Node({ node, style, dragHandle }) {
+  return (
+    <div style={style} ref={dragHandle} onClick={() => node.isInternal && node.toggle()} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-1 rounded-md">
+      {node.isLeaf ? '📄' : '📁'} {node.data.name}
+    </div>
+  );
+}
+
+export default RoomPage;

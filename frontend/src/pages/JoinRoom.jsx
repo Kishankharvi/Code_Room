@@ -1,17 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { getRoom } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { UserContext } from "../context/UserContext";
 
 export default function JoinRoom(){
-  const [roomId,setRoomId]=useState("");
-  const [error,setError]=useState("");
-  const [loading,setLoading]=useState(false);
-  const user = JSON.parse(localStorage.getItem("user")||"null");
-  const nav=useNavigate();
+  const [roomId, setRoomId] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { user, loading: userLoading } = useContext(UserContext);
+  const nav = useNavigate();
 
-  if(!user) {
-    nav("/");
-    return null;
+  useEffect(() => {
+    if (!userLoading && !user) {
+      nav("/");
+    }
+  }, [user, userLoading, nav]);
+
+  if (userLoading) {
+    return <div>Loading...</div>
   }
 
   async function doJoin(){
@@ -20,11 +26,15 @@ export default function JoinRoom(){
       setError("Please enter a room ID");
       return;
     }
+    if (!user) {
+        setError("You must be logged in to join a room.");
+        return;
+    }
     try {
       setLoading(true);
-      const r = await getRoom(roomId,user);
+      const r = await getRoom(roomId, user);
       if(r?.roomId) {
-        nav(`/room/${roomId}`, { state: { user }});
+        nav(`/room/${roomId}`);
       } else {
         setError("Room not found");
       }

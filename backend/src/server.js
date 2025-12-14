@@ -14,7 +14,7 @@ import registerSocketHandlers from "./socketHandlers.js";
 const app = express();
 
 app.use(cors({
-  origin: "*",
+  origin: true,
   credentials: true
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -47,7 +47,13 @@ app.use((err, req, res, next) => {
 });
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { 
+  cors: {
+    origin: true, 
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 registerSocketHandlers(io);
 

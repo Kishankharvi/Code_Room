@@ -1,28 +1,38 @@
-import React, { useState } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { createRoom } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { UserContext } from "../context/UserContext";
 
 export default function CreateRoom(){
-  const user = JSON.parse(localStorage.getItem("user")||"null");
-  const nav=useNavigate();
-  const [mode,setMode]=useState("one-to-one");
-  const [language,setLanguage]=useState("javascript");
-  const [maxUsers,setMaxUsers]=useState(5);
-  const [error,setError]=useState("");
-  const [loading,setLoading]=useState(false);
+  const { user, loading: userLoading } = useContext(UserContext);
+  const nav = useNavigate();
+  const [mode, setMode] = useState("interview");
+  const [language, setLanguage] = useState("javascript");
+  const [maxUsers, setMaxUsers] = useState(5);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  if(!user) {
-    nav("/");
-    return null;
+  useEffect(() => {
+    if (!userLoading && !user) {
+      nav("/");
+    }
+  }, [user, userLoading, nav]);
+
+  if (userLoading) {
+    return <div>Loading...</div>
   }
 
   async function doCreate(){
     setError("");
+    if (!user) {
+        setError("You must be logged in to create a room.");
+        return;
+    }
     try {
       setLoading(true);
-      const res = await createRoom(user?._id, mode, maxUsers, language);
+      const res = await createRoom(user, mode, maxUsers, language);
       if(res?.room?.roomId) {
-        nav(`/room/${res.room.roomId}`, { state: { user }});
+        nav(`/room/${res.room.roomId}`);
       } else {
         setError("Failed to create room");
       }
@@ -45,8 +55,8 @@ export default function CreateRoom(){
           <div className="form-group">
             <label>Session Mode</label>
             <select value={mode} onChange={e=>setMode(e.target.value)} className="form-select" disabled={loading}>
-              <option value="one-to-one">One-to-One Interview</option>
-              <option value="class">Class Teaching (One-to-Many)</option>
+              <option value="interview">Interview</option>
+              <option value="teaching">Teaching</option>
             </select>
           </div>
 
@@ -61,7 +71,7 @@ export default function CreateRoom(){
             </select>
           </div>
 
-          {mode==="class" && (
+          {mode==="teaching" && (
             <div className="form-group">
               <label>Max Participants</label>
               <input 
