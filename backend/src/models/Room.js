@@ -6,7 +6,7 @@ const roomSchema = new mongoose.Schema({
   mode: { type: String, enum: ["one-to-one","class"], default: "one-to-one" },
   maxUsers: { type: Number, default: 2 },
   language: { type: String, default: "javascript" },
-  users: [{ userId: String, username: String }]
+  users: [{ userId: mongoose.Schema.Types.ObjectId, username: String }]
 }, { timestamps: true });
 
 export default mongoose.model("Room", roomSchema);

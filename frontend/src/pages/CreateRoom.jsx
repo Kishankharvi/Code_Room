@@ -6,7 +6,7 @@ import { UserContext } from "../context/UserContext";
 export default function CreateRoom(){
   const { user, loading: userLoading } = useContext(UserContext);
   const nav = useNavigate();
-  const [mode, setMode] = useState("interview");
+  const [mode, setMode] = useState("one-to-one");
   const [language, setLanguage] = useState("javascript");
   const [maxUsers, setMaxUsers] = useState(5);
   const [error, setError] = useState("");
@@ -55,8 +55,8 @@ export default function CreateRoom(){
           <div className="form-group">
             <label>Session Mode</label>
             <select value={mode} onChange={e=>setMode(e.target.value)} className="form-select" disabled={loading}>
-              <option value="interview">Interview</option>
-              <option value="teaching">Teaching</option>
+              <option value="one-to-one">One-to-one</option>
+              <option value="class">Class</option>
             </select>
           </div>
 
@@ -71,7 +71,7 @@ export default function CreateRoom(){
             </select>
           </div>
 
-          {mode==="teaching" && (
+          {mode==="class" && (
             <div className="form-group">
               <label>Max Participants</label>
               <input 
