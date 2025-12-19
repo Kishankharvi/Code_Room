@@ -9,11 +9,18 @@ router.post("/create", async (req, res) => {
   try {
     const { user, mode = "one-to-one", maxUsers = 2, language = "javascript" } = req.body;
     const roomId = generateRoomId(8);
-    const room = await Room.create({ roomId, createdBy: user._id, mode, maxUsers, language });
-    room.users.push({ userId: user._id, username: user.username }); // Initial user
-    await room.save();
+    const room = await Room.create({
+      roomId,
+      createdBy: user._id,
+      mode,
+      maxUsers,
+      language,
+      users: [{ userId: user._id, username: user.username }]
+    });
     res.json({ success: true, room });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // get room details
