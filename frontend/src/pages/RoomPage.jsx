@@ -10,7 +10,6 @@ import Cursor from '../components/Cursor';
 import { getSocket } from '../services/socket';
 
 function RoomPage() {
-  console.log("RoomPage is loading");
   const navigate = useNavigate();
   const { user, loading: userLoading } = useContext(UserContext);
   const { room, files, code, setCode, selectFile } = useContext(RoomContext);
