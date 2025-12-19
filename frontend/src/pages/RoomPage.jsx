@@ -18,6 +18,7 @@ function RoomPage() {
   const { room, files, code, setCode, selectFile } = useContext(RoomContext);
   const termRef = useRef(null);
   const editorRef = useRef(null);
+  const fitAddonRef = useRef(null);
   const [cursors, setCursors] = useState([]);
   const [copied, setCopied] = useState(false);
   const [participants, setParticipants] = useState([]);
@@ -33,23 +34,18 @@ function RoomPage() {
     const socket = getSocket();
     const term = new Terminal({ cursorBlink: true });
     const fitAddon = new FitAddon();
+    fitAddonRef.current = fitAddon;
     term.loadAddon(fitAddon);
     term.open(termRef.current);
-    fitAddon.fit();
 
-    // Send terminal data to the server
+    const fitTimeout = setTimeout(() => fitAddon.fit(), 50);
+
     term.onData(data => {
-        if (socket) {
-            socket.emit('terminal:data', data);
-        }
+      if (socket) socket.emit('terminal:data', data);
     });
 
     if (socket) {
-      // Handle terminal response from the server
-      socket.on('terminal:response', (data) => {
-          term.write(data);
-      });
-
+      socket.on('terminal:response', (data) => term.write(data));
       socket.on('cursor:move', ({ userId, position, username }) => {
         setCursors(prev => {
           const existing = prev.find(c => c.userId === userId);
@@ -60,17 +56,12 @@ function RoomPage() {
           }
         });
       });
-
-      socket.on('user:leave', ({ userId }) => {
-        setCursors(prev => prev.filter(c => c.userId !== userId));
-      });
-
-      socket.on('update-participants', (participants) => {
-        setParticipants(participants);
-      });
+      socket.on('user:leave', ({ userId }) => setCursors(prev => prev.filter(c => c.userId !== userId)));
+      socket.on('update-participants', setParticipants);
     }
 
     return () => {
+      clearTimeout(fitTimeout);
       if (socket) {
         socket.off('cursor:move');
         socket.off('user:leave');
@@ -87,32 +78,31 @@ function RoomPage() {
   }
 
   const onSelect = (node) => {
-    if (node.isLeaf) {
-      selectFile(node.data);
-    }
+    if (node.isLeaf) selectFile(node.data);
   };
 
   const handleEditorDidMount = (editor) => {
     editorRef.current = editor;
     editor.onDidChangeCursorPosition(e => {
       const socket = getSocket();
-      if (socket) {
-        socket.emit('cursor:move', { roomId: room.roomId, position: e.position });
-      }
+      if (socket) socket.emit('cursor:move', { roomId: room.roomId, position: e.position });
     });
+  };
+  
+  const handleResize = () => {
+      fitAddonRef.current?.fit();
   };
 
   const handleCopy = () => {
     if (room?.roomId) {
-        navigator.clipboard.writeText(room.roomId);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+      navigator.clipboard.writeText(room.roomId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
   return (
     <div className="flex flex-col h-screen w-screen bg-gray-800 text-white">
-      {/* Header */}
       <header className="flex justify-between items-center p-2 bg-gray-900 border-b border-gray-700">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold">{room?.name || 'Loading...'}</h2>
@@ -128,29 +118,23 @@ function RoomPage() {
         </div>
       </header>
       
-      {/* Main Layout */}
-      <PanelGroup direction="horizontal" className="flex-grow">
-        {/* Left Panel */}
+      <PanelGroup direction="horizontal" className="flex-grow" onLayout={handleResize}>
         <Panel defaultSize={20}>
           <PanelGroup direction="vertical">
-            <Panel defaultSize={70} className="p-2 bg-gray-900">
+            <Panel defaultSize={70} className="p-2 bg-gray-900" onResize={handleResize}>
               <h3 className="font-bold mb-2 text-md">Files</h3>
-              <Tree initialData={files} onActivate={onSelect}>
-                {Node}
-              </Tree>
+              <Tree initialData={files} onActivate={onSelect}>{Node}</Tree>
             </Panel>
             <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
-            <Panel defaultSize={30}>
+            <Panel defaultSize={30} onResize={handleResize}>
               <ChatBox participants={participants} />
             </Panel>
           </PanelGroup>
         </Panel>
         <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-600" />
-        {/* Editor and Terminal Panel */}
-        <Panel>
+        <Panel onResize={handleResize}>
           <PanelGroup direction="vertical">
-            {/* Editor Panel */}
-            <Panel>
+            <Panel onResize={handleResize}>
               <div className="relative h-full w-full">
                 <Editor
                   height="100%"
@@ -165,25 +149,12 @@ function RoomPage() {
                   const editor = editorRef.current;
                   const position = editor.getScrolledVisiblePosition(c.position);
                   if (!position) return null;
-
-                  const top = position.top;
-                  const left = position.left;
-                  
-                  return (
-                    <Cursor
-                      key={c.userId}
-                      color={c.color}
-                      x={left}
-                      y={top}
-                      name={c.username}
-                    />
-                  );
+                  return <Cursor key={c.userId} color={c.color} x={position.left} y={position.top} name={c.username} />;
                 })}
               </div>
             </Panel>
             <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
-            {/* Terminal Panel */}
-            <Panel defaultSize={30}>
+            <Panel defaultSize={30} onResize={handleResize}>
               <div ref={termRef} className="h-full w-full bg-black" />
             </Panel>
           </PanelGroup>
