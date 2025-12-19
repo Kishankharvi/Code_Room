@@ -29,6 +29,9 @@ function RoomPage() {
     const socket = getSocket();
 
     if (socket) {
+
+      socket.emit('join-room', { roomId: room.roomId, user });
+
       socket.on('cursor:move', ({ userId, position, username }) => {
         setCursors(prev => {
           const existing = prev.find(c => c.userId === userId);
@@ -42,19 +45,26 @@ function RoomPage() {
 
       socket.on('user:leave', ({ userId }) => setCursors(prev => prev.filter(c => c.userId !== userId)));
       socket.on('update-participants', setParticipants);
+
+      socket.on('room-full', () => {
+        alert('This room is full.');
+        navigate('/dashboard');
+      });
     }
 
     return () => {
       if (socket) {
+        socket.emit('leave-room', { roomId: room.roomId, userId: user.id });
         socket.off('cursor:move');
         socket.off('user:leave');
         socket.off('update-participants');
+        socket.off('room-full');
       }
     };
 
-  }, [user, userLoading, navigate]);
+  }, [user, userLoading, navigate, room.roomId]);
 
-  if (userLoading) {
+  if (userLoading || !room) {
     return <div className="h-screen w-screen flex items-center justify-center bg-gray-800 text-white">Loading...</div>;
   }
 
@@ -85,7 +95,7 @@ function RoomPage() {
           <h2 className="text-xl font-bold">{room?.name || 'Loading...'}</h2>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">@{user?.username}</span>
+          <span className="text-sm text-gray-400">@{user?.username || 'user'}</span>
           <button onClick={handleCopy} title="Copy Room ID to clipboard" className="px-3 py-2 text-sm bg-gray-700 hover:bg-gray-600 rounded-md">
             {copied ? 'Copied!' : 'Share'}
           </button>
