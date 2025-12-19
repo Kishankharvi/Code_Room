@@ -14,7 +14,7 @@ import '@xterm/xterm/css/xterm.css';
 
 function RoomPage() {
   const navigate = useNavigate();
-  const { user } = useContext(UserContext);
+  const { user, loading: userLoading } = useContext(UserContext);
   const { room, files, code, setCode, selectFile } = useContext(RoomContext);
   const termRef = useRef(null);
   const editorRef = useRef(null);
@@ -23,10 +23,12 @@ function RoomPage() {
   const [participants, setParticipants] = useState([]);
 
   useEffect(() => {
-    if (!user) {
+    if (!userLoading && !user) {
       navigate('/');
       return;
     }
+
+    if (userLoading || !user || !termRef.current) return;
 
     const socket = getSocket();
     const term = new Terminal({ cursorBlink: true });
@@ -75,9 +77,14 @@ function RoomPage() {
         socket.off('update-participants');
         socket.off('terminal:response');
       }
+      term.dispose();
     };
 
-  }, [user, navigate]);
+  }, [user, userLoading, navigate]);
+
+  if (userLoading) {
+    return <div className="h-screen w-screen flex items-center justify-center bg-gray-800 text-white">Loading...</div>;
+  }
 
   const onSelect = (node) => {
     if (node.isLeaf) {
@@ -111,7 +118,7 @@ function RoomPage() {
           <h2 className="text-xl font-bold">{room?.name || 'Loading...'}</h2>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">@{user.username}</span>
+          <span className="text-sm text-gray-400">@{user?.username}</span>
           <button onClick={handleCopy} title="Copy Room ID to clipboard" className="px-3 py-2 text-sm bg-gray-700 hover:bg-gray-600 rounded-md">
             {copied ? 'Copied!' : 'Share'}
           </button>
