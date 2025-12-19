@@ -1,10 +1,4 @@
-import os
-import pty
-from socket import socket
 import Room from "./models/Room.js";
-
-# Keep track of the PTY processes
-ptys = {}
 
 export default function registerSocketHandlers(io) {
 
@@ -24,24 +18,6 @@ export default function registerSocketHandlers(io) {
 
   io.on("connection", (socket) => {
     console.log("socket connected", socket.id);
-
-    // Create a new pseudo-terminal for each connecting socket
-    const shell = os.environ.get('SHELL', 'bash')
-    const ptyProcess = pty.spawn(shell, [], {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 30,
-        cwd: process.env.PWD,
-        env: process.env
-    })
-
-    // Store the PTY process
-    ptys[socket.id] = ptyProcess
-
-    // Handle data from the PTY and send it to the client
-    ptyProcess.on('data', function (data) {
-        socket.emit('terminal:response', data.toString());
-    });
 
     socket.on("join-room", async ({ roomId, user }) => {
       try {
@@ -94,22 +70,9 @@ export default function registerSocketHandlers(io) {
         }
     });
 
-    // Handle incoming terminal data from the client
-    socket.on('terminal:data', (data) => {
-        if (ptys[socket.id]) {
-            ptys[socket.id].write(data);
-        }
-    });
-
     socket.on("disconnect", async () => {
       console.log("socket disconnected", socket.id);
       
-      // Kill the PTY process when the socket disconnects
-      if (ptys[socket.id]) {
-        ptys[socket.id].kill();
-        delete ptys[socket.id];
-      }
-
       const rooms = Array.from(socket.rooms);
       if (rooms.length > 1) {
         const roomId = rooms[1];

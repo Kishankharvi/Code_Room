@@ -2,23 +2,18 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tree } from 'react-arborist';
 import { Editor } from '@monaco-editor/react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { RoomContext } from '../context/RoomContext';
 import { UserContext } from '../context/UserContext';
 import ChatBox from '../components/ChatBox';
 import Cursor from '../components/Cursor';
 import { getSocket } from '../services/socket';
-import '@xterm/xterm/css/xterm.css';
 
 function RoomPage() {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useContext(UserContext);
   const { room, files, code, setCode, selectFile } = useContext(RoomContext);
-  const termRef = useRef(null);
   const editorRef = useRef(null);
-  const fitAddonRef = useRef(null);
   const [cursors, setCursors] = useState([]);
   const [copied, setCopied] = useState(false);
   const [participants, setParticipants] = useState([]);
@@ -29,23 +24,11 @@ function RoomPage() {
       return;
     }
 
-    if (userLoading || !user || !termRef.current) return;
+    if (userLoading || !user) return;
 
     const socket = getSocket();
-    const term = new Terminal({ cursorBlink: true });
-    const fitAddon = new FitAddon();
-    fitAddonRef.current = fitAddon;
-    term.loadAddon(fitAddon);
-    term.open(termRef.current);
-
-    const fitTimeout = setTimeout(() => fitAddon.fit(), 50);
-
-    term.onData(data => {
-      if (socket) socket.emit('terminal:data', data);
-    });
 
     if (socket) {
-      socket.on('terminal:response', (data) => term.write(data));
       socket.on('cursor:move', ({ userId, position, username }) => {
         setCursors(prev => {
           const existing = prev.find(c => c.userId === userId);
@@ -56,19 +39,17 @@ function RoomPage() {
           }
         });
       });
+
       socket.on('user:leave', ({ userId }) => setCursors(prev => prev.filter(c => c.userId !== userId)));
       socket.on('update-participants', setParticipants);
     }
 
     return () => {
-      clearTimeout(fitTimeout);
       if (socket) {
         socket.off('cursor:move');
         socket.off('user:leave');
         socket.off('update-participants');
-        socket.off('terminal:response');
       }
-      term.dispose();
     };
 
   }, [user, userLoading, navigate]);
@@ -87,10 +68,6 @@ function RoomPage() {
       const socket = getSocket();
       if (socket) socket.emit('cursor:move', { roomId: room.roomId, position: e.position });
     });
-  };
-  
-  const handleResize = () => {
-      fitAddonRef.current?.fit();
   };
 
   const handleCopy = () => {
@@ -118,46 +95,38 @@ function RoomPage() {
         </div>
       </header>
       
-      <PanelGroup direction="horizontal" className="flex-grow" onLayout={handleResize}>
+      <PanelGroup direction="horizontal" className="flex-grow">
         <Panel defaultSize={20}>
           <PanelGroup direction="vertical">
-            <Panel defaultSize={70} className="p-2 bg-gray-900" onResize={handleResize}>
+            <Panel defaultSize={70} className="p-2 bg-gray-900">
               <h3 className="font-bold mb-2 text-md">Files</h3>
               <Tree initialData={files} onActivate={onSelect}>{Node}</Tree>
             </Panel>
             <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
-            <Panel defaultSize={30} onResize={handleResize}>
+            <Panel defaultSize={30}>
               <ChatBox participants={participants} />
             </Panel>
           </PanelGroup>
         </Panel>
         <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-600" />
-        <Panel onResize={handleResize}>
-          <PanelGroup direction="vertical">
-            <Panel onResize={handleResize}>
-              <div className="relative h-full w-full">
-                <Editor
-                  height="100%"
-                  language="javascript"
-                  value={code}
-                  onChange={(value) => setCode(value)}
-                  theme="vs-dark"
-                  onMount={handleEditorDidMount}
-                />
-                {cursors.map(c => {
-                  if (!editorRef.current) return null;
-                  const editor = editorRef.current;
-                  const position = editor.getScrolledVisiblePosition(c.position);
-                  if (!position) return null;
-                  return <Cursor key={c.userId} color={c.color} x={position.left} y={position.top} name={c.username} />;
-                })}
-              </div>
-            </Panel>
-            <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-600" />
-            <Panel defaultSize={30} onResize={handleResize}>
-              <div ref={termRef} className="h-full w-full bg-black" />
-            </Panel>
-          </PanelGroup>
+        <Panel>
+            <div className="relative h-full w-full">
+              <Editor
+                height="100%"
+                language="javascript"
+                value={code}
+                onChange={(value) => setCode(value)}
+                theme="vs-dark"
+                onMount={handleEditorDidMount}
+              />
+              {cursors.map(c => {
+                if (!editorRef.current) return null;
+                const editor = editorRef.current;
+                const position = editor.getScrolledVisiblePosition(c.position);
+                if (!position) return null;
+                return <Cursor key={c.userId} color={c.color} x={position.left} y={position.top} name={c.username} />;
+              })}
+            </div>
         </Panel>
       </PanelGroup>
     </div>
