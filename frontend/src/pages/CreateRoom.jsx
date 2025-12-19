@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { UserContext } from "../context/UserContext";
 
 export default function CreateRoom(){
-  const { user, loading: userLoading } = useContext(UserContext);
+  const { user:userData, loading: userLoading } = useContext(UserContext);
   const nav = useNavigate();
   const [mode, setMode] = useState("one-to-one");
   const [language, setLanguage] = useState("javascript");
@@ -13,10 +13,10 @@ export default function CreateRoom(){
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!userLoading && !user) {
+    if (!userLoading && !userData) {
       nav("/");
     }
-  }, [user, userLoading, nav]);
+  }, [userData, userLoading, nav]);
 
   if (userLoading) {
     return <div>Loading...</div>
@@ -24,13 +24,13 @@ export default function CreateRoom(){
 
   async function doCreate(){
     setError("");
-    if (!user) {
+    if (!userData) {
         setError("You must be logged in to create a room.");
         return;
     }
     try {
       setLoading(true);
-      const res = await createRoom(user, mode, maxUsers, language);
+      const res = await createRoom(userData.user, mode, maxUsers, language);
       if(res?.room?.roomId) {
         nav(`/room/${res.room.roomId}`);
       } else {

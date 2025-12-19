@@ -38,7 +38,7 @@ router.post("/create", async (req, res) => {
 //replaced join room logic
 router.post("/:roomId/join", async (req, res) => {
   try {
-    const { user } = req.body;  // userId, name, avatar, etc.
+    const { user } = req.body;
 
     const room = await Room.findOne({ roomId: req.params.roomId });
     if (!room) return res.status(404).json({ message: "Room not found" });
