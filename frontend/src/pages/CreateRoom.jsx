@@ -30,7 +30,7 @@ export default function CreateRoom(){
     }
     try {
       setLoading(true);
-      const res = await createRoom(userData.user, mode, maxUsers, language);
+      const res = await createRoom(userData, mode, maxUsers, language);
       if(res?.room?.roomId) {
         nav(`/room/${res.room.roomId}`);
       } else {
