@@ -19,7 +19,7 @@ export default function CreateRoom(){
   }, [userData, userLoading, nav]);
 
   if (userLoading) {
-    return <div>Loading...</div>
+    return <div className="h-screen w-screen flex items-center justify-center bg-gray-800 text-white">Loading...</div>
   }
 
   async function doCreate(){
@@ -45,6 +45,12 @@ export default function CreateRoom(){
 
   return (
     <div className="form-container">
+      {loading && (
+        <div className="loading-overlay">
+          <div className="spinner"></div>
+          <p>Creating your room, please wait...</p>
+        </div>
+      )}
       <div className="form-box">
         <div className="form-header">
           <button onClick={()=>nav("/dashboard")} className="back-btn">← Back</button>

@@ -60,7 +60,7 @@ export const RoomProvider = ({ children }) => {
     const fetchRoomData = async () => {
       try {
         setLoading(true);
-        const roomData = await getRoom(roomId);
+        const roomData = await getRoom(roomId, user);
         if (roomData) {
           setRoom(roomData);
           const fileTree = buildFileTree(roomData.files || []);
